@@ -7,7 +7,10 @@
 from __future__ import print_function
 
 import argparse
+import BaseHTTPServer
+import httplib
 import sys
+import urlparse
 
 ################################################################################
 
@@ -28,14 +31,10 @@ def main(prog=None, args=None):
     Returns an integer whose value is an exit code suitable for specifying to
     sys.exit() to convey the result of the application.
     """
-
     if prog is None:
         prog = sys.argv[0]
-
     if args is None:
         args = sys.argv[1:]
-    else:
-        args = tuple(args) # create a local copy
 
     # parse the arguments then run the application
     arg_parser = MyArgumentParser(prog=prog)
@@ -68,13 +67,151 @@ def main(prog=None, args=None):
 ################################################################################
 
 class CardsApplication(object):
+    """
+    The cards applications.  Simply invoke this object's run() method to run
+    the application.
+    """
 
-    def __init__(self, http_port=8080):
-        self.http_port = http_port
+    def __init__(self, http_server_port=8080):
+        """
+        Initializes a new instance of this class.
+        *http_server_port* must be an integer whose value is the TCP port to
+        which the HTTP server will bind (default: 8080).
+        """
+        self.http_server_port = http_server_port
 
 
     def run(self):
-        print("HTTP Port: {}".format(self.http_port))
+        """
+        Runs this application.
+        Raises self.Error on error.
+        """
+        http_server = MyHttpServer(self.http_server_port)
+        print("Starting HTTP server on port {}".format(self.http_server_port))
+        http_server.run()
+
+
+    class Error(Exception):
+        """
+        Exception raised if an error occurs in the application.
+        """
+        pass
+
+################################################################################
+
+class MyHttpServer():
+    """
+    The HTTP server that provides the user interface for this application.
+    """
+
+    def __init__(self, tcp_port):
+        """
+        Initializes a new instance of this class.
+        *tcp_port* must be an integer whose value is the TCP port to which the
+        HTTP server will bind and to which it will listen for and handle
+        requests.
+        """
+        self.tcp_port = tcp_port
+
+
+    def run(self):
+        """
+        Starts and runs the HTTP server.
+        This method blocks until the HTTP server shuts down.
+        """
+        address = ("", self.tcp_port)
+        server = BaseHTTPServer.HTTPServer(server_address=address,
+            RequestHandlerClass=self.MyRequestHandler)
+        server.serve_forever()
+
+
+    class MyRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+        """
+        The HTTP request handler used by run().
+        """
+
+        def do_GET(self):
+            """
+            Handles GET requests.
+            """
+            parsed_url = urlparse.urlparse(self.path)
+            path = parsed_url.path
+
+            if path == "/":
+                self.send_response(httplib.OK)
+                self.respond_default()
+            elif path == "/stop":
+                self.send_response(httplib.OK)
+                self.respond_stop()
+            else:
+                self.send_error(httplib.NOT_FOUND)
+
+
+        def respond_default(self):
+            """
+            Responds to the default request.
+            This method must be invoked after send_response() but before
+            end_headers().
+            """
+            self.send_header("Content-Type", "text/html; charset=UTF-8")
+            self.end_headers()
+            self.write("<html>")
+            self.write("<head>")
+            self.write("<title>", newline=False)
+            self.write_escaped("Cards")
+            self.write("</title>")
+            self.write("</head>")
+            self.write("<body>")
+
+            for key in sorted(dir(self)):
+                value = getattr(self, key)
+                self.write_escaped("{}: {}".format(key, value))
+                self.write("<br/>")
+
+            self.write("</body>")
+            self.write("</html>")
+
+
+        def respond_stop(self):
+            """
+            Responds to a request to shut down the HTTP server.
+            This method must be invoked after send_response() but before
+            end_headers().
+            """
+            self.send_header("Content-Type", "text/plain; charset=UTF-8")
+            self.end_headers()
+            self.write("Shutting down HTTP server...")
+            self.wfile.flush()
+            self.server.shutdown()
+
+
+        def write(self, s, newline=True):
+            """
+            Writes a string to self.wfile, encoding it in UTF-8 first.
+            *s* must be a string whose UTF-8 encoding to write to the output
+            file.
+            *newline* is evaluated as a boolean; if it evaluates to True
+            (the default) then a \n character is written after the given string;
+            if False, then no newline character is printed.
+            """
+            s_encoded = s.encode("UTF-8")
+            self.wfile.write(s_encoded)
+            if newline:
+                self.wfile.write("\n".encode("UTF-8"))
+
+
+        def write_escaped(self, s, newline=True):
+            """
+            Writes a string to self.wfile, first escaping any special HTML
+            characters.  After escaping HTMl characters, this method invokes
+            self.write() with the resulting string and the given newline.
+            """
+            s = s.replace("&", "&amp;")
+            s = s.replace("'", "&apos;")
+            s = s.replace('"', "&quot;")
+            s = s.replace("<", "&lt;")
+            s = s.replace(">", "&gt;")
+            self.write(s, newline=newline)
 
 ################################################################################
 
@@ -156,8 +293,8 @@ class MyArgumentParser(argparse.ArgumentParser):
             This method is intended to be called after parsing the arguments
             in parse_args().
             """
-            http_port = self.port
-            return CardsApplication(http_port)
+            http_server_port = self.port
+            return CardsApplication(http_server_port)
 
 
     class Error(Exception):
