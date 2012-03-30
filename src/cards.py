@@ -9,6 +9,7 @@ from __future__ import print_function
 import argparse
 import BaseHTTPServer
 import httplib
+import random
 import sys
 import urlparse
 
@@ -187,8 +188,22 @@ class Deck(list):
     """
     A deck of cards.  This class is a specialization of the built-in list type
     for holding the cards in a deck of cards.  Each element of the list must be
-    a Card object.  The "top" of the deck is index 0.
+    a Card object.  The "bottom" of the deck is index 0.  Instances of this
+    class are *not* thread-safe.
     """
+
+    def __init__(self, *args, **kwargs):
+        """
+        Initializes a new instance of this class.
+        All positional and keyword arguments are passed verbatim to the
+        constructor of the superclass.
+        If no positional or keyword arguments are given, then the list is
+        initialized by reset().
+        """
+        super(list, self).__init__(*args, **kwargs)
+        if not args and not kwargs:
+            self.reset()
+
 
     def reset(self):
         """
@@ -197,8 +212,41 @@ class Deck(list):
         re-populated with the 13 different-ranked cards of each suit in
         ascending order.
         """
-        self[:] = (self.iter_cards())
+        self[:] = self.iter_cards()
 
+
+    def draw(self):
+        """
+        Draws a card from this deck.
+        The Card object at the highest index of this list is removed and
+        returned.  IndexError is raised if this list is empty.
+        """
+        return self.pop()
+
+
+    def shuffle(self):
+        """
+        Shuffles the cards in this deck using complete randomness.
+        """
+        random.shuffle(self)
+
+
+    def shuffle_3waycut(self):
+        """
+        Shuffles the cards in this deck using a "3-way cut" style.
+        This is done by dividing the deck into 3 piles of random size and then
+        recombining them in a random order.
+        """
+        split_index_1 = random.randint(0, len(self) - 1)
+        split_index_2 = random.randint(split_index_1, len(self) - 1)
+        chunk1 = self[:split_index_1]
+        chunk2 = self[split_index_1:split_index_2]
+        chunk3 = self[split_index_2:]
+        chunks = [chunk1, chunk2, chunk3]
+        random.shuffle(chunks)
+        del self[:]
+        for chunk in chunks:
+            self.extend(chunk)
 
     @staticmethod
     def iter_cards():
