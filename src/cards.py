@@ -99,6 +99,120 @@ class CardsApplication(object):
 
 ################################################################################
 
+class Card(object):
+    """
+    Represents a card in a standard deck of cards.
+    A card has 2 properties: a suit and a rank.
+    Instances of this class may be compared for equality using the == operator.
+    """
+
+    SPADE = "spade"
+    HEART = "heart"
+    CLUB = "club"
+    DIAMOND = "diamond"
+
+    RANK_NAMES = {
+        1: "ace",
+        11: "jack",
+        12: "queen",
+        13: "king",
+    }
+
+    SUIT_NAMES = {
+        SPADE: "spades",
+        HEART: "hearts",
+        CLUB: "clubs",
+        DIAMOND: "diamonds",
+    }
+
+    def __init__(self, suit, rank):
+        """
+        Initializes a new instance of this class.
+        *suit* is the suit of the card, and must be equal to one of the
+        following constants defined in this class: SPADE, HEART, CLUB, DIAMOND.
+        *rank* must be an integer whose value is the rank of the card; the
+        valid range is 1 to 13, inclusive, where 1 is the ace, 11 is the Jack,
+        12 is the Queen, and 13 is the king.
+        """
+        self.suit = suit
+        self.rank = rank
+
+
+    def __eq__(self, other):
+        """
+        Compares another object to this object for equality.
+        The object is considered to be "equal" if it has both a "suit" and a
+        "rank" attribute with values that compare equal using the == operator
+        to the corresponding attributes of this object.
+        """
+        try:
+            other_suit = other.suit
+            other_rank = other.rank
+        except AttributeError:
+            return False
+        else:
+            return self.suit == other_suit and self.rank == other_rank
+
+
+    def __str__(self):
+        """
+        Creates a human-friendly string representation of this object, and
+        returns it.  For example, if rank==1 and suit==CLUBS then "ace of clubs"
+        is returned.
+        """
+        if self.rank in self.RANK_NAMES:
+            rank_name = self.RANK_NAMES[self.rank]
+        else:
+            rank_name = self.rank
+
+        if self.suit in self.SUIT_NAMES:
+            suit_name = self.SUIT_NAMES[self.suit]
+        else:
+            suit_name = self.suit
+
+        return "{} of {}".format(rank_name, suit_name)
+
+
+    def __repr__(self):
+        """
+        Creates a Python-friendly string representation of this object, and
+        returns it.  For example, if rank==1 and suit==CLUBS then Card(clubs, 1)
+        is returned.
+        """
+        return "Card({}, {})".format(self.suit, self.rank)
+
+################################################################################
+
+class Deck(list):
+    """
+    A deck of cards.  This class is a specialization of the built-in list type
+    for holding the cards in a deck of cards.  Each element of the list must be
+    a Card object.  The "top" of the deck is index 0.
+    """
+
+    def reset(self):
+        """
+        Resets the deck back to the "factory" state.
+        All cards in this deck will be discarded and the deck will be
+        re-populated with the 13 different-ranked cards of each suit in
+        ascending order.
+        """
+        self[:] = (self.iter_cards())
+
+
+    @staticmethod
+    def iter_cards():
+        """
+        A generator function that yields each of the unique cards in a 52-card
+        deck as Card objects.
+        """
+        for suit in (Card.CLUB, Card.DIAMOND, Card.HEART, Card.SPADE):
+            for rank in xrange(1, 14):
+                yield Card(suit, rank)
+
+
+################################################################################
+
 class MyHttpServer():
     """
     The HTTP server that provides the user interface for this application.
