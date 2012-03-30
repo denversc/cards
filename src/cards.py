@@ -236,8 +236,11 @@ class Deck(list):
         Shuffles the cards in this deck using a "3-way cut" style.
         This is done by dividing the deck into 3 piles of random size and then
         recombining them in a random order.
+        Raises AssertionError if len(self) is less than 3, because in this
+        scenario the 3-way-cut is not possible.
         """
-        split_index_1 = random.randint(0, len(self) - 1)
+        assert len(self) >= 3, "len(self)=={}".format(len(self))
+        split_index_1 = random.randint(0, len(self) - 2)
         split_index_2 = random.randint(split_index_1, len(self) - 1)
         chunk1 = self[:split_index_1]
         chunk2 = self[split_index_1:split_index_2]
