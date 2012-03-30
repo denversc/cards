@@ -251,6 +251,49 @@ class Deck(list):
         for chunk in chunks:
             self.extend(chunk)
 
+
+    def shuffle_riffle(self):
+        """
+        Shuffles the cards in the deck using the "riffle" technique.
+        According to Wikipedia, riffle is a shuffling technique "in which half
+        of the deck is held in each hand with the thumbs inward, then cards are
+        released by the thumbs so that they fall to the table interleaved.
+        """
+        num_cards = len(self)
+
+        if num_cards <= 1:
+            return # nothing to do if deck is empty or only has 1 card
+
+        mid = num_cards / 2
+        leeway = num_cards / 10
+        mid_left = mid - leeway
+        if mid_left < 1:
+            mid_left = 1
+        mid_right = mid + leeway
+        if mid_right > num_cards - 1:
+            mid_right = num_cards - 1
+
+        split_index = random.randint(mid_left, mid_right)
+        left = self[:split_index]
+        right = self[split_index:]
+
+        del self[:]
+        while left or right:
+            size_difference = len(right) - len(left)
+
+            if size_difference > -5:
+                n = random.randint(1, 3)
+                while right and n > 0:
+                    self.append(right.pop(0))
+                    n -= 1
+
+            if size_difference < 5:
+                n = random.randint(1, 3)
+                while left and n > 0:
+                    self.append(left.pop(0))
+                    n -= 1
+
+
     @staticmethod
     def iter_cards():
         """
