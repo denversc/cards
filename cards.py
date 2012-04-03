@@ -238,17 +238,29 @@ class Deck(list):
         random.shuffle(self)
 
 
-    def shuffle_3waycut(self):
+    def shuffle_3waycut(self, split_index_1=None, split_index_2=None):
         """
         Shuffles the cards in this deck using a "3-way cut" style.
         This is done by dividing the deck into 3 piles of random size and then
-        recombining them in a random order.
-        Raises AssertionError if len(self) is less than 3, because in this
-        scenario the 3-way-cut is not possible.
+        recombining them in a random order.  If there are fewer than 3 cards in
+        the deck then this method simply calls shuffle(), as there is no way to
+        do a 3-way-split with less than 3 cards.
+
+        *split_index_1* and *split_index_2* must be integers whose values are
+        the indices within the array at which the splits take place.  They may
+        both be None (the default) to choose a random value.  split_index_1
+        must be less than or equal to split_index_2.  Note that these two values
+        are normally not specified; they are included in the parameter list to
+        facilitate unit testing.
         """
-        assert len(self) >= 3, "len(self)=={}".format(len(self))
-        split_index_1 = random.randint(0, len(self) - 2)
-        split_index_2 = random.randint(split_index_1, len(self) - 1)
+        if len(self) < 3:
+            self.shuffle()
+            return
+
+        if split_index_1 is None:
+            split_index_1 = random.randint(1, len(self) - 2)
+        if split_index_2 is None:
+            split_index_2 = random.randint(split_index_1 + 1, len(self) - 1)
         chunk1 = self[:split_index_1]
         chunk2 = self[split_index_1:split_index_2]
         chunk3 = self[split_index_2:]
@@ -268,9 +280,13 @@ class Deck(list):
         """
         num_cards = len(self)
 
+        # nothing to do if deck is empty or only has 1 card
         if num_cards <= 1:
-            return # nothing to do if deck is empty or only has 1 card
+            return
 
+        # find a uniform interval about the center of the deck;
+        # the "leeway" simulates how closely a human will find the true center,
+        # with increasing accuracy as the deck gets smaller
         mid = num_cards / 2
         leeway = num_cards / 10
         mid_left = mid - leeway
@@ -280,20 +296,35 @@ class Deck(list):
         if mid_right > num_cards - 1:
             mid_right = num_cards - 1
 
+        # split the deck into two halves, choosing the split point randomly
+        # within the "leeway" of the true center, as calculated above
         split_index = random.randint(mid_left, mid_right)
         left = self[:split_index]
         right = self[split_index:]
 
+        # remove all cards from the deck;
+        # they will be added back in the loop below as they are "fanned"
         del self[:]
+
+        # continue contributing cards from the left and right piles until both
+        # are empty
         while left or right:
+
+            # size_difference is used to simulate how a human will tend to
+            # "even out" the left and right piles should one start getting
+            # noticeably smaller than the other
             size_difference = len(right) - len(left)
 
+            # contribute a few cards from the right hand, if the pile isn't too
+            # much bigger than the one in the left hand
             if size_difference > -5:
                 n = random.randint(1, 3)
                 while right and n > 0:
                     self.append(right.pop(0))
                     n -= 1
 
+            # contribute a few cards from the left hand, if the pile isn't too
+            # much bigger than the one in the right hand
             if size_difference < 5:
                 n = random.randint(1, 3)
                 while left and n > 0:
@@ -305,7 +336,8 @@ class Deck(list):
     def iter_cards():
         """
         A generator function that yields each of the unique cards in a 52-card
-        deck as Card objects.
+        deck as Card objects, grouped by suit and in decreasing order of rank,
+        from King down to Ace.
         """
         for suit in (Card.CLUB, Card.DIAMOND, Card.HEART, Card.SPADE):
             for rank in (13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1):
