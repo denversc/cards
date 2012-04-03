@@ -395,9 +395,9 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.write('<body onload=\'sendRequest("ping")\'>')
 
             self.write("<span>")
-            self.write('<img id="deck" src="res/deck.png" '
+            self.write('<img id="deck" src="res/deck_blank.png" '
                 'onclick=\'sendRequest("draw")\' width="212" height="287" />')
-            self.write('<img id="discard" src="res/deck_empty.png" '
+            self.write('<img id="discard" src="res/deck_blank.png" '
                 'width="212" height="287" />')
             self.write("</span>")
 
