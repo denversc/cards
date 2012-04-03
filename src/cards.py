@@ -183,7 +183,7 @@ class Card(object):
         returns it.  For example, if rank==1 and suit==CLUBS then Card(clubs, 1)
         is returned.
         """
-        return "Card({}, {})".format(self.suit, self.rank)
+        return "Card({!r}, {!r})".format(self.suit, self.rank)
 
 ################################################################################
 
