@@ -364,6 +364,14 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                 self.do_send_html()
             elif path == "/draw":
                 self.do_draw()
+            elif path == "/reset":
+                self.do_reset()
+            elif path == "/shuffle_random":
+                self.do_shuffle_random()
+            elif path == "/shuffle_3waycut":
+                self.do_shuffle_3waycut()
+            elif path == "/shuffle_riffle":
+                self.do_shuffle_riffle()
             elif path == "/shutdown":
                 self.do_shutdown()
             elif path.startswith("/res/"):
@@ -395,20 +403,32 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             with self.server.deck:
                 deck_filename = self.get_deck_filename()
                 discard_filename = self.get_discard_filename()
+                cards_remaining_html = self.get_cards_remaining_html()
 
-            self.write("<span>")
+            self.write("<div>")
             self.write('<img id="deck" src="{}" '
                 'onclick=\'sendRequest("draw")\' width="212" height="287" />'
                 .format(deck_filename))
             self.write('<img id="discard" src="{}" '
                 'width="212" height="287" />'
                 .format(discard_filename))
-            self.write("</span>")
-
-            self.write("<div>")
-            self.write('<input type="button" value="Shutdown" '
-                'onclick=\'sendRequest("shutdown")\'/>')
             self.write("</div>")
+
+            self.write('<div id="cards_remaining">')
+            self.write(cards_remaining_html)
+            self.write("</div>")
+            self.write('<div id="message">&nbsp;</div>')
+
+            self.write('<input type="button" value="Reset" '
+                'onclick=\'sendRequest("reset")\'/><br/>')
+            self.write('<input type="button" value="Shuffle (Random)" '
+                'onclick=\'sendRequest("shuffle_random")\'/><br/>')
+            self.write('<input type="button" value="Shuffle (3-way-cut)" '
+                'onclick=\'sendRequest("shuffle_3waycut")\'/><br/>')
+            self.write('<input type="button" value="Shuffle (Riffle)" '
+                'onclick=\'sendRequest("shuffle_riffle")\'/><br/>')
+            self.write('<input type="button" value="Shutdown" '
+                'onclick=\'sendRequest("shutdown")\'/><br/>')
 
             self.write("</body>")
             self.write("</html>")
@@ -434,6 +454,47 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                     discard = deck.draw()
                     self.server.discard = discard
                 self.send_ajax_response()
+
+
+        def do_reset(self):
+            """
+            Responds to a request to reset the deck.
+            """
+            deck = self.server.deck
+            with deck:
+                deck.reset()
+                self.server.discard = None
+                self.send_ajax_response("Deck has been reset")
+
+
+        def do_shuffle_random(self):
+            """
+            Responds to a request to do a "random" shuffle.
+            """
+            deck = self.server.deck
+            with deck:
+                deck.shuffle()
+                self.send_ajax_response("Shuffled using \"random\" algorithm")
+
+
+        def do_shuffle_3waycut(self):
+            """
+            Responds to a request to do a "3-way-cut" shuffle.
+            """
+            deck = self.server.deck
+            with deck:
+                deck.shuffle_3waycut()
+                self.send_ajax_response("Shuffled using \"3-way-cut\" algorithm")
+
+
+        def do_shuffle_riffle(self):
+            """
+            Responds to a request to do a "riffle" shuffle.
+            """
+            deck = self.server.deck
+            with deck:
+                deck.shuffle_riffle()
+                self.send_ajax_response("Shuffled using \"Riffle\" algorithm")
 
 
         def do_resource(self, filename):
@@ -469,6 +530,16 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             else:
                 filename = self.get_card_filename(discard)
             return filename
+
+
+        def get_cards_remaining_html(self):
+            """
+            Returns a string whose value is valid HTML that specifies how many
+            cards are left in the deck.
+            """
+            with self.server.deck:
+                num_cards = len(self.server.deck)
+            return "Cards Remaining: {}".format(num_cards)
 
 
         def get_deck_filename(self):
@@ -531,13 +602,15 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             with self.server.deck:
                 deck_filename = self.get_deck_filename()
                 discard_filename = self.get_discard_filename()
+                cards_remaining_html = self.get_cards_remaining_html()
 
             self.write("<state>")
             self.write("<deck-filename>{0}</deck-filename>"
                 .format(deck_filename))
-            if discard_filename is not None:
-                self.write("<discard-filename>{0}</discard-filename>"
-                    .format(discard_filename))
+            self.write("<discard-filename>{0}</discard-filename>"
+                .format(discard_filename))
+            self.write("<cards-remaining>{0}</cards-remaining>"
+                .format(cards_remaining_html))
             if message is not None:
                 self.write("<message>{}</message>".format(message))
             self.write("</state>")
@@ -580,11 +653,13 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                     if (request.readyState == 4) {
                         var doc = request.responseXML;
 
+                        var messageDivElement = document.getElementById("message");
+                        messageDivElement.innerHTML = "&nbsp;";
                         var messageElements = doc.getElementsByTagName("message");
                         for (var i=0; i<messageElements.length; i++) {
                             var messageElement = messageElements[i];
                             var message = messageElement.childNodes[0].nodeValue
-                            alert(message);
+                            messageDivElement.innerHTML = message;
                         }
 
                         var deckFilenameElements = doc.getElementsByTagName("deck-filename");
@@ -601,6 +676,14 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                             var discardFilename = discardFilenameElement.childNodes[0].nodeValue;
                             var discardElement = document.getElementById("discard");
                             discardElement.setAttribute("src", discardFilename);
+                        }
+
+                        var cardsRemainingElements = doc.getElementsByTagName("cards-remaining");
+                        if (cardsRemainingElements.length > 0) {
+                            var cardsRemainingElement = cardsRemainingElements[0];
+                            var cardsRemainingTxt = cardsRemainingElement.childNodes[0].nodeValue;
+                            var divElement = document.getElementById("cards_remaining");
+                            divElement.innerHTML = cardsRemainingTxt
                         }
                     }
                 }
