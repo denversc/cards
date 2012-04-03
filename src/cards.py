@@ -463,8 +463,9 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             deck = self.server.deck
             with deck:
                 deck.reset()
+                deck.shuffle()
                 self.server.discard = None
-                self.send_ajax_response("Deck has been reset")
+                self.send_ajax_response("Deck has been reset and shuffled")
 
 
         def do_shuffle_random(self):
