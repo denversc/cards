@@ -341,6 +341,8 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
         HTTP server will bind and to which it will listen for and handle
         requests.
         """
+        self.deck = Deck()
+        self.discard = None
         address = ("", tcp_port)
         BaseHTTPServer.HTTPServer.__init__(self, server_address=address,
             RequestHandlerClass=self.MyRequestHandler)
@@ -360,7 +362,7 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
 
             if path == "/":
                 self.respond_default()
-            elif path == "/stop":
+            elif path == "/shutdown":
                 self.respond_stop()
             elif path.startswith("/res/"):
                 res_filename = path[5:]
@@ -379,6 +381,9 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.end_headers()
             self.write("<html>")
             self.write("<head>")
+            self.write('<script type="text/javascript">')
+            self.write(self.DEFAULT_JAVASCRIPT)
+            self.write("</script>")
             self.write("<title>", newline=False)
             self.write_escaped("Cards")
             self.write("</title>")
@@ -386,10 +391,16 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.write("<body>")
 
             self.write("<span>")
-            self.write('<img src="res/deck.png" width="212" height="287">')
-            self.write('<img src="res/card_{}.png" width="212" height="287">'
-                .format("hearts_9"))
+            self.write('<img id="deck" src="res/deck.png" '
+                'onclick="onDeckClicked()" width="212" height="287" />')
+            self.write('<img id="discard" style="visibility:hidden" '
+                'width="212" height="287" />')
             self.write("</span>")
+
+            self.write("<div>")
+            self.write('<input type="button" value="Shutdown" '
+                'onclick="doShutdown()"/>')
+            self.write("</div>")
 
             self.write("</body>")
             self.write("</html>")
@@ -458,6 +469,19 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             s = s.replace("<", "&lt;")
             s = s.replace(">", "&gt;")
             self.write(s, newline=newline)
+
+
+        DEFAULT_JAVASCRIPT = ur"""
+        function onDeckClicked() {
+            alert("yoyo");
+        }
+
+        function doShutdown() {
+            request = new XMLHttpRequest();
+            request.open("GET", "shutdown", false);
+            request.send();
+        }
+        """
 
 ################################################################################
 
