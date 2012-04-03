@@ -201,7 +201,7 @@ class Deck(list):
         If no positional or keyword arguments are given, then the list is
         initialized by reset().
         """
-        super(list, self).__init__(*args, **kwargs)
+        super(Deck, self).__init__(*args, **kwargs)
         if not args and not kwargs:
             self.reset()
 
