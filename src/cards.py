@@ -362,8 +362,6 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
 
             if path == "/":
                 self.do_send_html()
-            elif path == "/ping":
-                self.do_ping()
             elif path == "/draw":
                 self.do_draw()
             elif path == "/shutdown":
@@ -392,13 +390,19 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.write_escaped("Cards")
             self.write("</title>")
             self.write("</head>")
-            self.write('<body onload=\'sendRequest("ping")\'>')
+            self.write('<body>')
+
+            with self.server.deck:
+                deck_filename = self.get_deck_filename()
+                discard_filename = self.get_discard_filename()
 
             self.write("<span>")
-            self.write('<img id="deck" src="res/deck_blank.png" '
-                'onclick=\'sendRequest("draw")\' width="212" height="287" />')
-            self.write('<img id="discard" src="res/deck_blank.png" '
-                'width="212" height="287" />')
+            self.write('<img id="deck" src="{}" '
+                'onclick=\'sendRequest("draw")\' width="212" height="287" />'
+                .format(deck_filename))
+            self.write('<img id="discard" src="{}" '
+                'width="212" height="287" />'
+                .format(discard_filename))
             self.write("</span>")
 
             self.write("<div>")
@@ -432,14 +436,6 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                 self.send_ajax_response()
 
 
-        def do_ping(self):
-            """
-            Simply sends the state to the remote client; can be used like a
-            "refresh" operation.
-            """
-            self.send_ajax_response()
-
-
         def do_resource(self, filename):
             """
             Responds to a request to serve a file from the "res" directory.
@@ -465,14 +461,35 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
         def get_discard_filename(self):
             """
             Returns the filename of the card image in the discard pile.
-            Returns None if the discard pile is empty.
             """
-            discard = self.server.discard
-
+            with self.server.deck:
+                discard = self.server.discard
             if discard is None:
-                return None
+                filename = "res/deck_blank.png"
+            else:
+                filename = self.get_card_filename(discard)
+            return filename
 
-            suit = discard.suit
+
+        def get_deck_filename(self):
+            """
+            Returns the filename of the deck image.
+            """
+            with self.server.deck:
+                deck_len = len(self.server.deck)
+            filename = "res/deck.png" if deck_len else "res/deck_empty.png"
+            return filename
+
+
+        @staticmethod
+        def get_card_filename(card):
+            """
+            Returns the filename of the resource image for the given card.
+            *card* must be a Card object whose image filename to return.
+            Returns a string whose value is the path of the image to embed in
+            the HTML document for the given card.
+            """
+            suit = card.suit
             if suit == Card.DIAMOND:
                 suit_id = "diamonds"
             elif suit == Card.HEART:
@@ -484,7 +501,7 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             else:
                 suit_id = "{}".format(suit)
 
-            rank = discard.rank
+            rank = card.rank
             if rank == 1:
                 rank_id = "ace"
             elif rank == 11:
@@ -512,11 +529,12 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.end_headers()
 
             with self.server.deck:
-                deck_len = len(self.server.deck)
+                deck_filename = self.get_deck_filename()
                 discard_filename = self.get_discard_filename()
 
             self.write("<state>")
-            self.write("<deck-length>{0}</deck-length>".format(deck_len))
+            self.write("<deck-filename>{0}</deck-filename>"
+                .format(deck_filename))
             if discard_filename is not None:
                 self.write("<discard-filename>{0}</discard-filename>"
                     .format(discard_filename))
@@ -569,17 +587,10 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                             alert(message);
                         }
 
-                        var deckLengthElements = doc.getElementsByTagName("deck-length");
-                        if (deckLengthElements.length > 0) {
-                            var deckLengthElement = deckLengthElements[0];
-                            var deckLength = deckLengthElement.childNodes[0].nodeValue;
-
-                            var deckFilename = null;
-                            if (deckLength == "0") {
-                                deckFilename = "res/deck_empty.png";
-                            } else {
-                                deckFilename = "res/deck.png";
-                            }
+                        var deckFilenameElements = doc.getElementsByTagName("deck-filename");
+                        if (deckFilenameElements.length > 0) {
+                            var deckFilenameElement = deckFilenameElements[0];
+                            var deckFilename = deckFilenameElement.childNodes[0].nodeValue;
                             var deckElement = document.getElementById("deck");
                             deckElement.setAttribute("src", deckFilename);
                         }
