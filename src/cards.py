@@ -361,17 +361,21 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             path = parsed_url.path
 
             if path == "/":
-                self.respond_default()
+                self.do_send_html()
+            elif path == "/ping":
+                self.do_ping()
+            elif path == "/draw":
+                self.do_draw()
             elif path == "/shutdown":
-                self.respond_stop()
+                self.do_shutdown()
             elif path.startswith("/res/"):
                 res_filename = path[5:]
-                self.respond_res(res_filename)
+                self.do_resource(res_filename)
             else:
                 self.send_error(httplib.NOT_FOUND)
 
 
-        def respond_default(self):
+        def do_send_html(self):
             """
             Responds to the default request.
             """
@@ -392,35 +396,48 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
 
             self.write("<span>")
             self.write('<img id="deck" src="res/deck.png" '
-                'onclick="onDeckClicked()" width="212" height="287" />')
+                'onclick=\'sendRequest("draw")\' width="212" height="287" />')
             self.write('<img id="discard" style="visibility:hidden" '
                 'width="212" height="287" />')
             self.write("</span>")
 
             self.write("<div>")
             self.write('<input type="button" value="Shutdown" '
-                'onclick="doShutdown()"/>')
+                'onclick=\'sendRequest("shutdown")\'/>')
             self.write("</div>")
 
             self.write("</body>")
             self.write("</html>")
 
 
-        def respond_stop(self):
+        def do_shutdown(self):
             """
             Responds to a request to shut down the HTTP server.
             """
-            self.send_response(httplib.OK)
-            self.send_header("Content-Type", "text/plain; charset=UTF-8")
-            self.end_headers()
-            self.write("Shutting down HTTP server...")
-            self.wfile.flush()
+            self.send_ajax_response(message="HTTP server shut down")
 
             # must call shutdown in a separate thread to avoid deadlock
             threading.Thread(target=self.server.shutdown).start()
 
 
-        def respond_res(self, filename):
+        def do_draw(self):
+            """
+            Responds to a request to draw a card.
+            """
+            with self.server.deck:
+                self.server.deck.draw()
+                self.send_ajax_response(message="card drawn")
+
+
+        def do_ping(self):
+            """
+            Simply sends the state to the remote client; can be used like a
+            "refresh" operation.
+            """
+            self.send_ajax_response()
+
+
+        def do_resource(self, filename):
             """
             Responds to a request to serve a file from the "res" directory.
             *filename* must be a string whose value is the path of the file
@@ -440,6 +457,69 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                     if not data:
                         break
                     self.wfile.write(data)
+
+
+        def get_discard_filename(self):
+            """
+            Returns the filename of the card image in the discard pile.
+            Returns None if the discard pile is empty.
+            """
+            discard = self.server.discard
+
+            if discard is None:
+                return None
+
+            suit = discard.suit
+            if suit == Card.DIAMOND:
+                suit_id = "diamonds"
+            elif suit == Card.HEART:
+                suit_id = "hearts"
+            elif suit == Card.CLUB:
+                suit_id = "clubs"
+            elif suit == Card.SPADE:
+                suit_id = "spades"
+            else:
+                suit_id = "{}".format(suit)
+
+            rank = discard.rank
+            if rank == 1:
+                rank_id = "ace"
+            elif rank == 11:
+                rank_id = "jack"
+            elif rank == 12:
+                rank_id = "queen"
+            elif rank == 13:
+                rank_id = "king"
+            else:
+                rank_id = "{}".format(rank)
+
+            filename = "card_{}_{}.png".format(suit_id, rank_id)
+            return filename
+
+
+        def send_ajax_response(self, message=None):
+            """
+            Writes the state of the application for XMLHttpRequest responses,
+            including the HTTP response code, HTTP headers, and body.
+            *message* must be a string whose value is a message to display on
+            the client; may be None (the default) to not display a message.
+            """
+            self.send_response(httplib.OK)
+            self.send_header("Content-Type", "text/xml; charset=UTF-8")
+            self.end_headers()
+
+            with self.server.deck:
+                deck_len = len(self.server.deck)
+                discard_filename = self.get_discard_filename()
+
+            self.write("<state>")
+            self.write("<deck-length>{0}</deck-length>".format(deck_len))
+            if discard_filename is not None:
+                self.write("<discard-filename>{0}</discard-filename>"
+                    .format(discard_filename))
+            if message is not None:
+                self.write("<message>{}</message>".format(message))
+            self.write("</state>")
 
 
         def write(self, s, newline=True):
@@ -472,15 +552,25 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
 
 
         DEFAULT_JAVASCRIPT = ur"""
-        function onDeckClicked() {
-            alert("yoyo");
-        }
+            function sendRequest(action) {
+                var request = new XMLHttpRequest();
 
-        function doShutdown() {
-            request = new XMLHttpRequest();
-            request.open("GET", "shutdown", false);
-            request.send();
-        }
+                request.onreadystatechange = function handleOnReadyStateChange() {
+                    if (request.readyState == 4) {
+                        var doc = request.responseXML;
+
+                        messageElements = doc.getElementsByTagName("message");
+                        for (var i=0; i<messageElements.length; i++) {
+                            messageElement = messageElements[i];
+                            message = messageElement.childNodes[0].nodeValue
+                            alert(message);
+                        }
+                    }
+                }
+
+                request.open("GET", action, false);
+                request.send();
+            }
         """
 
 ################################################################################
