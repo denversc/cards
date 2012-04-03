@@ -11,7 +11,6 @@ import BaseHTTPServer
 import httplib
 import os
 import random
-import shutil
 import sys
 import threading
 import urlparse
@@ -343,6 +342,7 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
         """
         self.deck = Deck()
         self.discard = None
+        self.message = None
         address = ("", tcp_port)
         BaseHTTPServer.HTTPServer.__init__(self, server_address=address,
             RequestHandlerClass=self.MyRequestHandler)
@@ -372,6 +372,10 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                 self.do_shuffle_3waycut()
             elif path == "/shuffle_riffle":
                 self.do_shuffle_riffle()
+            elif path == "/find":
+                self.do_find()
+            elif path == "/findimpl":
+                self.do_findimpl()
             elif path == "/shutdown":
                 self.do_shutdown()
             elif path.startswith("/res/"):
@@ -395,6 +399,7 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.send_response(httplib.OK)
 
             self.send_header("Content-Type", "text/html; charset=UTF-8")
+            self.send_header("Cache-Control", "no-cache")
             self.end_headers()
             self.write("<html>")
             self.write("<head>")
@@ -406,11 +411,15 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.write("</title>")
             self.write("</head>")
             self.write('<body>')
+            self.write('<h2>Deck of Cards</h2>')
+            self.write('<p>Click on the deck to draw a card</p>')
 
             with self.server.deck:
                 deck_filename = self.get_deck_filename()
                 discard_filename = self.get_discard_filename()
                 cards_remaining_html = self.get_cards_remaining_html()
+                message = self.server.message
+                self.server.message = None
 
             self.write("<div>")
             self.write('<img id="deck" src="{}" '
@@ -424,7 +433,14 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.write('<div id="cards_remaining">')
             self.write(cards_remaining_html)
             self.write("</div>")
-            self.write('<div id="message">&nbsp;</div>')
+            self.write('<div id="message">')
+            if message:
+                self.write_escaped(message)
+            else:
+                self.write("&nbsp;")
+            self.write("</div>")
+
+            self.write('<form name="find" action="find" />')
 
             self.write('<input type="button" value="Reset" '
                 'onclick=\'sendRequest("reset")\'/><br/>')
@@ -434,11 +450,84 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                 'onclick=\'sendRequest("shuffle_3waycut")\'/><br/>')
             self.write('<input type="button" value="Shuffle (Riffle)" '
                 'onclick=\'sendRequest("shuffle_riffle")\'/><br/>')
+            self.write('<input type="submit" value="Find Card" '
+                'onclick=\'document.forms["find"].submit()\' /><br/>')
             self.write('<input type="button" value="Shutdown" '
                 'onclick=\'sendRequest("shutdown")\'/><br/>')
 
             self.write("</body>")
             self.write("</html>")
+
+
+        def do_find(self):
+            """
+            Responds to the "find" request.
+            """
+            self.send_response(httplib.OK)
+
+            self.send_header("Content-Type", "text/html; charset=UTF-8")
+            self.send_header("Cache-Control", "public")
+            self.end_headers()
+            self.write("<html>")
+            self.write("<head>")
+            self.write("<title>", newline=False)
+            self.write_escaped("Find a Card")
+            self.write("</title>")
+            self.write("</head>")
+            self.write('<body>')
+            self.write("<h2>Find a Card</h2>")
+
+            self.write_escaped("Click on the card to find:")
+            self.write('<form action="findimpl" method="post">')
+            deck = Deck()
+            for (index, card) in enumerate(reversed(deck)):
+                if index % 13 == 0:
+                    self.write("<div/>")
+                filename = self.get_card_filename(card)
+                self.write('<input type="image" width="71" height="96" '
+                    'src="{}" name="{}" />'.format(filename, card))
+            self.write("</form>")
+
+            self.write("</body>")
+            self.write("</html>")
+
+
+        def do_findimpl(self):
+            """
+            Responds to the "findimpl" request.
+            """
+            self.send_response(httplib.OK)
+            self.send_header("Content-Type", "text/html; charset=UTF-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+
+            # parse the key/value pairs from the POST message
+            content_length_str = self.headers["content-length"]
+            content_length = int(content_length_str)
+            line = self.rfile.read(content_length)
+            params = urlparse.parse_qs(line, keep_blank_values=True)
+
+            # find the card and store the message
+            (card_index, card) = self.find_card(params)
+            if card is None:
+                message = None
+            elif card_index < 0:
+                message = "{} not found in deck".format(card)
+            else:
+                message = "{} found in deck at position {}".format(card,
+                    card_index)
+
+            with self.server.deck:
+                self.server.message = message
+
+            # send a quick JavaScript trick to redirect back to the main page
+            self.write("<html>")
+            self.write('<body onload=\'document.forms["redirect"].submit()\'>')
+            self.write('<form name="redirect" action="/">')
+            self.write("</form>")
+            self.write("</body>")
+            self.write("</html>")
+
 
 
         def do_shutdown(self):
@@ -519,12 +608,40 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             else:
                 self.send_response(httplib.OK)
                 self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Cache-Control", "public")
                 self.end_headers()
                 while True:
-                    data = f.read(8192)
+                    data = f.read(16384)
                     if not data:
                         break
                     self.wfile.write(data)
+
+
+        def find_card(self, params):
+            """
+            Finds a card in the deck and returns its index.
+            *params* must be a dict that was specified to do_send_html().
+            """
+            deck = Deck()
+            card = None
+            for cur_card in deck:
+                key = "{}.x".format(cur_card)
+                if key in params:
+                    card = cur_card
+                    break
+
+            deck = self.server.deck
+            with deck:
+                if not card:
+                    index = -1
+                else:
+                    try:
+                        index = deck.index(card)
+                        index = len(deck) - index
+                    except ValueError:
+                        index = -1
+
+            return (index, card)
 
 
         def get_discard_filename(self):
