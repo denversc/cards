@@ -11,6 +11,7 @@ import BaseHTTPServer
 import httplib
 import random
 import sys
+import threading
 import urlparse
 
 ################################################################################
@@ -90,7 +91,7 @@ class CardsApplication(object):
         http_server = MyHttpServer(self.http_server_port)
         print("To use the application, browse to http://localhost:{}"
             .format(self.http_server_port))
-        http_server.run()
+        http_server.serve_forever()
 
 
     class Error(Exception):
@@ -308,7 +309,7 @@ class Deck(list):
 
 ################################################################################
 
-class MyHttpServer():
+class MyHttpServer(BaseHTTPServer.HTTPServer):
     """
     The HTTP server that provides the user interface for this application.
     """
@@ -320,18 +321,9 @@ class MyHttpServer():
         HTTP server will bind and to which it will listen for and handle
         requests.
         """
-        self.tcp_port = tcp_port
-
-
-    def run(self):
-        """
-        Starts and runs the HTTP server.
-        This method blocks until the HTTP server shuts down.
-        """
-        address = ("", self.tcp_port)
-        server = BaseHTTPServer.HTTPServer(server_address=address,
+        address = ("", tcp_port)
+        BaseHTTPServer.HTTPServer.__init__(self, server_address=address,
             RequestHandlerClass=self.MyRequestHandler)
-        server.serve_forever()
 
 
     class MyRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
@@ -391,8 +383,9 @@ class MyHttpServer():
             self.end_headers()
             self.write("Shutting down HTTP server...")
             self.wfile.flush()
-            self.server.shutdown()
 
+            # must call shutdown in a separate thread to avoid deadlock
+            threading.Thread(target=self.server.shutdown).start()
 
         def write(self, s, newline=True):
             """
