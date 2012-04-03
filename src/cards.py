@@ -309,7 +309,7 @@ class Deck(list):
         deck as Card objects.
         """
         for suit in (Card.CLUB, Card.DIAMOND, Card.HEART, Card.SPADE):
-            for rank in xrange(1, 14):
+            for rank in (13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1):
                 yield Card(suit, rank)
 
 
