@@ -392,12 +392,12 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.write_escaped("Cards")
             self.write("</title>")
             self.write("</head>")
-            self.write("<body>")
+            self.write('<body onload=\'sendRequest("ping")\'>')
 
             self.write("<span>")
             self.write('<img id="deck" src="res/deck.png" '
                 'onclick=\'sendRequest("draw")\' width="212" height="287" />')
-            self.write('<img id="discard" style="visibility:hidden" '
+            self.write('<img id="discard" src="res/deck_empty.png" '
                 'width="212" height="287" />')
             self.write("</span>")
 
@@ -424,9 +424,11 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             """
             Responds to a request to draw a card.
             """
-            with self.server.deck:
-                self.server.deck.draw()
-                self.send_ajax_response(message="card drawn")
+            deck = self.server.deck
+            with deck:
+                if len(deck) > 0:
+                    deck.draw()
+                self.send_ajax_response()
 
 
         def do_ping(self):
@@ -559,11 +561,26 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                     if (request.readyState == 4) {
                         var doc = request.responseXML;
 
-                        messageElements = doc.getElementsByTagName("message");
+                        var messageElements = doc.getElementsByTagName("message");
                         for (var i=0; i<messageElements.length; i++) {
-                            messageElement = messageElements[i];
-                            message = messageElement.childNodes[0].nodeValue
+                            var messageElement = messageElements[i];
+                            var message = messageElement.childNodes[0].nodeValue
                             alert(message);
+                        }
+
+                        var deckLengthElements = doc.getElementsByTagName("deck-length");
+                        if (deckLengthElements.length > 0) {
+                            var deckLengthElement = deckLengthElements[0];
+                            var deckLength = deckLengthElement.childNodes[0].nodeValue;
+
+                            var deckFilename = null;
+                            if (deckLength == "0") {
+                                deckFilename = "res/deck_empty.png";
+                            } else {
+                                deckFilename = "res/deck.png";
+                            }
+                            var deckElement = document.getElementById("deck");
+                            deckElement.setAttribute("src", deckFilename);
                         }
                     }
                 }
