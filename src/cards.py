@@ -427,7 +427,8 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             deck = self.server.deck
             with deck:
                 if len(deck) > 0:
-                    deck.draw()
+                    discard = deck.draw()
+                    self.server.discard = discard
                 self.send_ajax_response()
 
 
@@ -495,7 +496,7 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             else:
                 rank_id = "{}".format(rank)
 
-            filename = "card_{}_{}.png".format(suit_id, rank_id)
+            filename = "res/card_{}_{}.png".format(suit_id, rank_id)
             return filename
 
 
@@ -581,6 +582,14 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                             }
                             var deckElement = document.getElementById("deck");
                             deckElement.setAttribute("src", deckFilename);
+                        }
+
+                        var discardFilenameElements = doc.getElementsByTagName("discard-filename");
+                        if (discardFilenameElements.length > 0) {
+                            var discardFilenameElement = discardFilenameElements[0];
+                            var discardFilename = discardFilenameElement.childNodes[0].nodeValue;
+                            var discardElement = document.getElementById("discard");
+                            discardElement.setAttribute("src", discardFilename);
                         }
                     }
                 }
