@@ -9,7 +9,9 @@ from __future__ import print_function
 import argparse
 import BaseHTTPServer
 import httplib
+import os
 import random
+import shutil
 import sys
 import threading
 import urlparse
@@ -357,11 +359,12 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             path = parsed_url.path
 
             if path == "/":
-                self.send_response(httplib.OK)
                 self.respond_default()
             elif path == "/stop":
-                self.send_response(httplib.OK)
                 self.respond_stop()
+            elif path.startswith("/res/"):
+                res_filename = path[5:]
+                self.respond_res(res_filename)
             else:
                 self.send_error(httplib.NOT_FOUND)
 
@@ -369,9 +372,9 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
         def respond_default(self):
             """
             Responds to the default request.
-            This method must be invoked after send_response() but before
-            end_headers().
             """
+            self.send_response(httplib.OK)
+
             self.send_header("Content-Type", "text/html; charset=UTF-8")
             self.end_headers()
             self.write("<html>")
@@ -382,10 +385,11 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             self.write("</head>")
             self.write("<body>")
 
-            for key in sorted(dir(self)):
-                value = getattr(self, key)
-                self.write_escaped("{}: {}".format(key, value))
-                self.write("<br/>")
+            self.write("<span>")
+            self.write('<img src="res/deck.png" width="212" height="287">')
+            self.write('<img src="res/card_{}.png" width="212" height="287">'
+                .format("hearts_9"))
+            self.write("</span>")
 
             self.write("</body>")
             self.write("</html>")
@@ -394,9 +398,8 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
         def respond_stop(self):
             """
             Responds to a request to shut down the HTTP server.
-            This method must be invoked after send_response() but before
-            end_headers().
             """
+            self.send_response(httplib.OK)
             self.send_header("Content-Type", "text/plain; charset=UTF-8")
             self.end_headers()
             self.write("Shutting down HTTP server...")
@@ -404,6 +407,29 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
 
             # must call shutdown in a separate thread to avoid deadlock
             threading.Thread(target=self.server.shutdown).start()
+
+
+        def respond_res(self, filename):
+            """
+            Responds to a request to serve a file from the "res" directory.
+            *filename* must be a string whose value is the path of the file
+            whose contents to respond with.
+            """
+            path = os.path.join("res", filename)
+            try:
+                f = open(path, "rb")
+            except (IOError, OSError):
+                self.send_error(httplib.NOT_FOUND)
+            else:
+                self.send_response(httplib.OK)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.end_headers()
+                while True:
+                    data = f.read(8192)
+                    if not data:
+                        break
+                    self.wfile.write(data)
+
 
         def write(self, s, newline=True):
             """
