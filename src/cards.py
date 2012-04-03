@@ -88,7 +88,8 @@ class CardsApplication(object):
         Raises self.Error on error.
         """
         http_server = MyHttpServer(self.http_server_port)
-        print("Starting HTTP server on port {}".format(self.http_server_port))
+        print("To use the application, browse to http://localhost:{}"
+            .format(self.http_server_port))
         http_server.run()
 
 
