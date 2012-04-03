@@ -191,7 +191,10 @@ class Deck(list):
     A deck of cards.  This class is a specialization of the built-in list type
     for holding the cards in a deck of cards.  Each element of the list must be
     a Card object.  The "bottom" of the deck is index 0.  Instances of this
-    class are *not* thread-safe.
+    class are *not* thread-safe; however, this class has a "lock" attribute that
+    can be acquired by multiple threads to safely perform concurrent access.
+    This class also implements the context manager protocol to better implement
+    acquiring the lock with the "with" statement.
     """
 
     def __init__(self, *args, **kwargs):
@@ -205,6 +208,7 @@ class Deck(list):
         super(Deck, self).__init__(*args, **kwargs)
         if not args and not kwargs:
             self.reset()
+        self.lock = threading.RLock()
 
 
     def reset(self):
@@ -306,6 +310,20 @@ class Deck(list):
             for rank in xrange(1, 14):
                 yield Card(suit, rank)
 
+
+    def __enter__(self):
+        """
+        Acquire the lock when we are "entered" with the "with" statement.
+        """
+        self.lock.acquire()
+        return self
+
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Release the lock when the "with" statement exits.
+        """
+        self.lock.release()
 
 ################################################################################
 
