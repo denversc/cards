@@ -381,6 +381,13 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                 self.send_error(httplib.NOT_FOUND)
 
 
+        def do_POST(self):
+            """
+            Handles POST requests, by simply calling self.do_GET().
+            """
+            return self.do_GET()
+
+
         def do_send_html(self):
             """
             Responds to the default request.
@@ -598,6 +605,7 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
             """
             self.send_response(httplib.OK)
             self.send_header("Content-Type", "text/xml; charset=UTF-8")
+            self.send_header("Cache-Control", "no-cache")
             self.end_headers()
 
             with self.server.deck:
@@ -689,8 +697,10 @@ class MyHttpServer(BaseHTTPServer.HTTPServer):
                     }
                 }
 
-                request.open("GET", action, false);
-                request.send();
+                // to prevent client-side caching (such as in Internet Explorer)
+                // use POST instead of GET and send some ever-changing data
+                request.open("POST", action, false);
+                request.send("cache-killer=" + new Date());
             }
         """
 
